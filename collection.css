@@ -1,0 +1,48 @@
+.cover-handwriting {
+  width:100%;max-width:390px;aspect-ratio:1744 / 901;margin:0;
+  background:#f4dce8;
+  mask:url("./img/mine-street.png") center / contain no-repeat;
+}
+.collection-head {
+  --filter-height:46px;
+  --filter-gap:8px;
+  --portrait-height:calc(var(--filter-height) * 2 + var(--filter-gap));
+  display:grid;grid-template-columns:calc(var(--portrait-height) * .777) minmax(0,320px);
+  align-items:start;gap:clamp(12px,3vw,24px);margin-bottom:18px
+}
+/* Crop the empty margins around the illustrated frame. */
+.collection-portrait-frame {position:relative;height:var(--portrait-height);overflow:hidden}
+.collection-portrait {
+  position:absolute;display:block;max-width:none;width:110.05%;height:112.11%;
+  left:-4.02%;top:-5.86%;object-fit:cover
+}
+.collection-portrait[data-fit="outfit"] {inset:0;width:100%;height:100%;object-position:top center}
+.collection-controls {display:grid;align-items:start;gap:var(--filter-gap);min-width:0}
+.brand-filter,.collection-style {min-width:0}
+.brand-toggle,.collection-style select {
+  width:100%;min-height:var(--filter-height);padding:8px 12px;border:1px solid var(--lilac-line,#d4c5c9);
+  border-radius:13px;background:#fffafc;color:#443643;font-size:14px;text-align:left
+}
+.brand-toggle {display:flex;align-items:center;justify-content:space-between;gap:8px}
+.brand-toggle span:first-child {overflow-wrap:anywhere}
+.brand-chevron {transition:transform .22s ease}
+.brand-toggle[aria-expanded=true] .brand-chevron {transform:rotate(180deg)}
+.brand-panel {display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s ease}
+.brand-toggle[aria-expanded=true]+.brand-panel {grid-template-rows:1fr}
+.brand-options {overflow:hidden;min-height:0}
+.brand-options button {
+  display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;
+  min-height:44px;padding:8px 12px;text-align:left;overflow-wrap:anywhere;border-radius:10px
+}
+.brand-options button[aria-pressed=true] {background:#eaddf0;color:#49344c}
+.brand-options button[aria-pressed=true]::after {content:'✓'}
+.brand-options button:focus-visible {outline-offset:-3px}
+.product-description p {white-space:pre-line}
+#thumbs button[aria-pressed=true] {box-shadow:0 0 0 2px #694b61 inset;outline:2px solid #694b61}
+@media(max-width:480px) {
+  .collection-head {gap:12px}
+  .brand-toggle,.collection-style select {font-size:16px}
+}
+@media(prefers-reduced-motion:reduce) {
+  .brand-panel,.brand-chevron {transition:none}
+}

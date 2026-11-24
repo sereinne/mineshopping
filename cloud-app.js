@@ -7,34 +7,23 @@ let displayOrder;
 let data, products, bag = JSON.parse(localStorage.getItem('mine-bag-v2') || '{}');
 const notes=JSON.parse(localStorage.getItem('meowfield-notes')||'{}');
 const entries = () => Object.entries(bag).filter(([id,n]) => products.has(id) && Number.isInteger(n) && n>0);
-const cartSyncKey = 'meowfield-cart-sync';
 let cartSyncQueue = Promise.resolve();
 
-function cartSharingEnabled() {
- const state = localStorage.getItem(cartSyncKey);
- return state !== 'off' && (Boolean(state) || !localStorage.getItem('meowfield-cart-id'));
-}
-function sharingNotice() {
- return cartSharingEnabled() ? '加购后，商品、数量和备注会自动同步给 mcw，按日保存。' : '购物车自动同步已关闭。';
-}
 function syncCartRecord() {
- if (!cartSharingEnabled()) return;
- let key = localStorage.getItem(cartSyncKey);
+ let key = localStorage.getItem('meowfield-cart-id');
  if (!key) {
   key = crypto.randomUUID();
-  localStorage.setItem(cartSyncKey,key);
-  localStorage.setItem('meowfield-cart-id',key);
+  localStorage.setItem('meowfield-cart-id', key);
  }
  const body = JSON.stringify({key, lines:entries().map(([id,qty])=>[id,qty,notes[id]||''])});
  const send = async () => {
-  if (localStorage.getItem(cartSyncKey) !== key) return;
   const result = await fetch('/api/cart-records', {
    method:'POST',headers:{'Content-Type':'application/json'},body,
    keepalive:new Blob([body]).size < 60000,
   });
   if (!result.ok) throw Error('Cart sync failed');
  };
- cartSyncQueue = cartSyncQueue.then(send).catch(()=>notice('购物车同步失败，本机选款已保留'));
+cartSyncQueue = cartSyncQueue.then(send).catch(()=>console.warn('[cart-sync] failed'));
 }
 
 function sync({record=true}={}){
@@ -66,7 +55,7 @@ function home(){
  }
  function draw(){
  const all=displayOrder.filter(p=>(!brand||brand===p.brand)&&(!$('styles').value||$('styles').value===collectionCategory(p.type)));
- $('info').textContent=all.length+' 件 · 汇率日期 '+data.date+' · '+sharingNotice();
+ $('info').textContent=all.length+' 件 · 汇率日期 '+data.date;
  $('grid').innerHTML=all.slice(0,limit).map(p=>'<article><a class="image" href="'+detail(p.id)+'"><img loading="lazy" src="'+escapeText(p.photo)+'" alt="'+escapeText(p.name)+'"></a><small>'+escapeText(p.brand)+'</small><h3><a href="'+detail(p.id)+'">'+escapeText(p.name)+'</a></h3><div class="cost"><div>'+money(p.price)+'</div>'+addButton(p)+'</div></article>').join('');
  $('more').hidden=limit>=all.length;
  }
@@ -95,7 +84,7 @@ function description(p){
 async function product(){
  const p=products.get(new URLSearchParams(location.search).get('id'));if(!p){main.textContent='未找到商品';return;}
  main.innerHTML='<div class="spread"><div class="gallery"><img id="hero" class="heroImg" src="'+escapeText(p.photo)+'" alt="'+escapeText(p.name)+'"><div id="thumbs"></div><p id="galleryState">正在读取原店图片…</p></div><section class="product-info"><small>'+escapeText(p.brand)+'</small><h2>'+escapeText(p.name)+'</h2><p>'+escapeText(collectionCategory(p.type))+'</p><div class="amount">'+money(p.price)+'</div><p>汇率日期 '+data.date+'</p>'+addButton(p,' 加入购物车')+' <a class="browse" target="_blank" rel="noopener" href="'+escapeText(p.url)+'">访问原站 ↗</a>'+description(p)+'</section></div>';
- main.querySelector('[data-add]').insertAdjacentHTML('beforebegin','<p>'+sharingNotice()+'</p>');
+
  try{const r=await fetch('/api/gallery?id='+p.id);if(!r.ok)throw Error();const urls=await r.json();$('galleryState').textContent=urls.length>1?'共 '+urls.length+' 张图片':'原店仅返回封面图';
  if (urls.length > 1) {
    urls.forEach((url, i) => {
@@ -118,20 +107,6 @@ function line(p,n,rate,edit){
 function cart(){
  const list=entries();
  main.innerHTML='<section class="sheet cart-shell"><small>YOUR SELECTION</small><h2>购物车</h2>'+list.map(([id,n])=>line(products.get(id),n,data.rate,true)).join('')+(list.length?'<footer class="cart-total"><div>合计 '+money(list.reduce((s,[id,n])=>s+products.get(id).price*n,0))+'</div><button class="primary" id="submit">提交给 mcw</button></footer>':'<div class="cart-empty"><p>购物车还是空的。</p><a href="/#collection">继续选款 →</a></div>')+'</section>';
- const enabled = cartSharingEnabled();
- main.querySelector('.cart-shell').insertAdjacentHTML('beforeend',
-  '<p>'+sharingNotice()+'</p>'+
-  '<button type="button" id="cart-sync" aria-pressed="'+enabled+'">'+(enabled?'停止同步购物车':'开启购物车同步')+'</button>');
- $('cart-sync').onclick=()=>{
-  if(enabled)localStorage.setItem(cartSyncKey,'off');
-  else {
-   let cartId=localStorage.getItem('meowfield-cart-id');
-   if(!cartId){cartId=crypto.randomUUID();localStorage.setItem('meowfield-cart-id',cartId);}
-   localStorage.setItem(cartSyncKey,cartId);
-   syncCartRecord();
-  }
-  cart();
- };
  if($('submit'))$('submit').onclick=async()=>{const btn=$('submit');main.inert=true;btn.disabled=true;try{
  const key=localStorage.getItem('mine-request')||crypto.randomUUID();localStorage.setItem('mine-request',key);
  const r=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,lines:list.map(([id,n])=>[id,n,notes[id]||''])})});if(!r.ok)throw Error();
@@ -204,4 +179,6 @@ main.addEventListener('click',e=>{const a=e.target.closest('[data-add]'),r=e.tar
  const groups=[...new Set(data.items.map(p=>p.brand))].map(b=>data.items.filter(p=>p.brand===b));
  displayOrder=[];for(let i=0;i<Math.max(...groups.map(g=>g.length));i++)for(const group of groups)if(group[i])displayOrder.push(group[i]);
  const legacyPage=new URLSearchParams(location.search).get('page');
- sync({record:false});if((location.pathname==='/cart'||legacyPage==='cart'))cart();else if((location.pathname==='/product'||legacyPage==='product'))await product();else if(location.pathname.startsWith('/admin'))await admin();else home();})().catch(()=>main.textContent='页面读取失败，请刷新重试。');
+try{localStorage.removeItem('meowfield-cart-sync')}catch{}
+ sync({record:false});if((location.pathname==='/cart'||legacyPage==='cart'))cart();
+ else if((location.pathname==='/product'||legacyPage==='product'))await product();else if(location.pathname.startsWith('/admin'))await admin();else home();})().catch(()=>main.textContent='页面读取失败，请刷新重试。');

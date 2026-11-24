@@ -11,7 +11,7 @@ const reply = (status, data = {}) => Response.json(data, {status, headers: priva
 async function authenticate(request, password) {
   if (!password) return false;
   const encoder = new TextEncoder();
-  const expected = 'Basic ' + btoa(String.fromCharCode(...encoder.encode('admin:' + password)));
+  const expected = 'Basic ' + btoa(String.fromCharCode(...encoder.encode('serein:' + password)));
   const getDigest = text => crypto.subtle.digest('SHA-256', encoder.encode(text));
   const [actualDigest, expectedDigest] = await Promise.all([
     getDigest(request.headers.get('Authorization') || ''), getDigest(expected),

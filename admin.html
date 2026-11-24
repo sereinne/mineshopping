@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>选款管理 · Meowfield</title>
+<style>
+  * {box-sizing:border-box}
+  body {margin:0;background:#f3ecf2;color:#30263a;font:16px/1.55 system-ui,sans-serif}
+  header,main {width:min(740px,calc(100% - 32px));margin:24px auto}
+  header img {width:145px;display:block}
+  main {padding:clamp(16px,5vw,36px);background:#fff9fc;border:1px solid #ddd0dc;border-radius:16px}
+  h1 {margin:0 0 8px}
+  a {color:#594362}
+  input {display:block;margin-top:6px;max-width:100%;font:inherit}
+  details {border-top:1px solid #e4d9e3;padding:12px 0}
+  summary {cursor:pointer;font-weight:600}
+  article {margin:12px 0;padding:14px;background:#f5eef4;border-radius:10px}
+  article h2 {font-size:1.08rem;margin:3px 0}
+  article p {margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+  li + li {margin-top:10px}
+  ul {padding-left:20px}
+</style>
+<header><a href="./"><img src="./img/meowfield-header.svg" alt="Meowfield · 返回选款"></a></header>
+<main>
+  <h1>选款管理</h1>
+  <p>导入购物车导出的选款清单。导入记录保存在此浏览器。</p>
+  <label>导入选款清单 <input id="import" type="file" accept=".json,application/json" multiple></label>
+  <p id="status" role="status"></p>
+  <div id="orders"></div>
+</main>
+<script>
+const storageKey = 'meowfield-admin-orders-v1';
+const input = document.querySelector('#import');
+const status = document.querySelector('#status');
+const archive = document.querySelector('#orders');
+const zone = {timeZone:'Asia/Shanghai'};
+const dayFormat = new Intl.DateTimeFormat('zh-CN', {...zone, dateStyle:'long'});
+const timeFormat = new Intl.DateTimeFormat('zh-CN', {...zone, hour:'2-digit', minute:'2-digit', hourCycle:'h23'});
+
+function validOrder(order) {
+  return order && typeof order.key === 'string' && order.key.length > 0 &&
+    typeof order.created === 'string' && Number.isFinite(Date.parse(order.created)) &&
+    Number.isFinite(order.rate) && order.rate > 0 &&
+    Array.isArray(order.lines) && order.lines.length > 0 && order.lines.every(p =>
+      p && typeof p.name === 'string' && typeof p.brand === 'string' &&
+      Number.isSafeInteger(p.price) && p.price >= 0 &&
+      Number.isSafeInteger(p.qty) && p.qty > 0 && p.qty <= 999 &&
+      (p.note == null || typeof p.note === 'string'));
+}
+
+let orders = [];
+try {
+  const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  if (Array.isArray(saved)) orders = saved.filter(validOrder);
+} catch {}
+
+function add(parent, tag, content) {
+  const element = document.createElement(tag);
+  element.textContent = content;
+  parent.append(element);
+  return element;
+}
+
+function render() {
+  archive.replaceChildren();
+  const days = new Map();
+  for (const order of [...orders].sort((a,b) => Date.parse(b.created) - Date.parse(a.created))) {
+    const day = dayFormat.format(new Date(order.created));
+    if (!days.has(day)) days.set(day, []);
+    days.get(day).push(order);
+  }
+  for (const [day, records] of days) {
+    const section = add(archive, 'details', '');
+    section.open = days.keys().next().value === day;
+    add(section, 'summary', day + ' · ' + records.length + ' 份');
+    for (const order of records) {
+      const article = add(section, 'article', '');
+      add(article, 'small', timeFormat.format(new Date(order.created)));
+      add(article, 'h2', '选款清单 · ' + order.lines.reduce((sum,p) => sum + p.qty, 0) + ' 件');
+      const list = add(article, 'ul', '');
+      let total = 0;
+      for (const p of order.lines) {
+        const row = add(list, 'li', p.brand + ' · ' + p.name);
+        const subtotal = p.qty * p.price;
+        total += subtotal;
+        add(row, 'p', '× ' + p.qty + ' · JP¥ ' + subtotal.toLocaleString('ja-JP'));
+        if (p.note) add(row, 'p', p.note);
+        if (typeof p.url === 'string' && URL.canParse(p.url) && new URL(p.url).protocol === 'https:') {
+          const link = add(row, 'a', '查看原店');
+          link.href = p.url;
+          link.rel = 'noreferrer';
+        }
+      }
+      add(article, 'footer', '合计 JP¥ ' + total.toLocaleString('ja-JP') + ' · 约 CN¥ ' + (total * order.rate).toFixed(2));
+    }
+  }
+}
+
+input.addEventListener('change', async () => {
+  input.disabled = true;
+  try {
+    const incoming = (await Promise.all(Array.from(input.files, async file =>
+      JSON.parse(await file.text())))).flat();
+    if (!incoming.length || !incoming.every(validOrder)) throw Error('invalid selection');
+    const next = new Map(orders.map(o => [o.key,o]));
+    for (const order of incoming) if (!next.has(order.key)) next.set(order.key, order);
+    const added = next.size - orders.length;
+    const merged = [...next.values()];
+    localStorage.setItem(storageKey, JSON.stringify(merged));
+    orders = merged;
+    render();
+    status.textContent = '新增 ' + added + ' 份，共 ' + orders.length + ' 份。';
+  } catch {
+    status.textContent = '导入失败，请检查清单文件格式和浏览器存储。';
+  } finally {
+    input.value = '';
+    input.disabled = false;
+  }
+});
+status.textContent = '已导入 ' + orders.length + ' 份。';
+render();
+</script>
+</html>
